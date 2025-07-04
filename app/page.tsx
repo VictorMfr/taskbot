@@ -1,5 +1,15 @@
-import Image from "next/image";
+'use client';
+
+import Footer from "@/components/LandingPage/Footer";
+import Header from "@/components/LandingPage/Header";
+import MainSection from "@/components/LandingPage/MainSection";
 
 export default function Home() {
-  return <>Hello</>;
+  return (
+    <>
+      <Header/>
+      <MainSection/>
+      <Footer/>
+    </>
+  );
 }
