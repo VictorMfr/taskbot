@@ -18,10 +18,22 @@ import { useChatAI, type ChatMessage } from "@/hooks/useChatAI";
 import ErrorAlert from "./ErrorAlert";
 import RetryIndicator from "./RetryIndicator";
 import ErrorTestPanel from "./ErrorTestPanel";
+import ProposalButtons from "./ProposalButtons";
 
-function ChatMessageComponent({ message }: { message: ChatMessage }) {
+function ChatMessageComponent({ 
+  message, 
+  onApprove, 
+  onReject, 
+  isProcessing 
+}: { 
+  message: ChatMessage; 
+  onApprove: (proposalId: string) => Promise<boolean>;
+  onReject: (proposalId: string) => Promise<boolean>;
+  isProcessing: boolean;
+}) {
   const theme = useTheme();
   const isUser = message.role === "user";
+  
   return (
     <Fade in>
       <Box
@@ -29,6 +41,7 @@ function ChatMessageComponent({ message }: { message: ChatMessage }) {
           display: "flex",
           justifyContent: isUser ? "flex-end" : "flex-start",
           mb: 1,
+          flexDirection: "column",
         }}
       >
         <Paper
@@ -54,6 +67,18 @@ function ChatMessageComponent({ message }: { message: ChatMessage }) {
         >
           {message.content}
         </Paper>
+        
+        {/* Mostrar botones de propuesta si existen */}
+        {!isUser && message.proposedChanges && (
+          <Box sx={{ mt: 1, ml: 0 }}>
+            <ProposalButtons
+              proposal={message.proposedChanges}
+              onApprove={onApprove}
+              onReject={onReject}
+              isProcessing={isProcessing}
+            />
+          </Box>
+        )}
       </Box>
     </Fade>
   );
@@ -73,6 +98,8 @@ export default function Sidebar() {
     retryLastMessage,
     cancelRequest,
     clearError,
+    approveProposal,
+    rejectProposal,
   } = useChatAI({
     maxRetries: 3,
     retryDelay: 1000,
@@ -187,7 +214,13 @@ export default function Sidebar() {
           </Box>
         ) : (
           messages.map((msg) => (
-            <ChatMessageComponent key={msg.id} message={msg} />
+            <ChatMessageComponent 
+              key={msg.id} 
+              message={msg} 
+              onApprove={approveProposal}
+              onReject={rejectProposal}
+              isProcessing={isStreaming}
+            />
           ))
         )}
         {isStreaming && (

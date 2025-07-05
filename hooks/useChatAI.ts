@@ -1,11 +1,22 @@
 "use client";
 import { useState, useCallback, useRef } from "react";
+import Cookies from 'js-cookie';
 
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  proposedChanges?: ProposedChanges;
+}
+
+export interface ProposedChanges {
+  id: string;
+  type: "create" | "update" | "delete";
+  entity: "task" | "subtask";
+  data: any;
+  originalData?: any;
+  description: string;
 }
 
 export interface ChatError {
@@ -19,6 +30,7 @@ export interface UseChatAIOptions {
   retryDelay?: number;
   onError?: (error: ChatError) => void;
   onSuccess?: (message: ChatMessage) => void;
+  onProposalCreated?: (proposal: ProposedChanges) => void;
 }
 
 export function useChatAI(options: UseChatAIOptions = {}) {
@@ -27,6 +39,7 @@ export function useChatAI(options: UseChatAIOptions = {}) {
     retryDelay = 1000,
     onError,
     onSuccess,
+    onProposalCreated,
   } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -200,6 +213,23 @@ export function useChatAI(options: UseChatAIOptions = {}) {
                   content: msg.content + data.content,
                 }));
               }
+              
+              // Manejar propuestas detectadas
+              if (data.proposals && Array.isArray(data.proposals)) {
+                data.proposals.forEach((proposal: any) => {
+                  // Guardar la propuesta en la base de datos
+                  saveProposal(proposal);
+                  
+                  // Actualizar el mensaje con la propuesta
+                  updateLastMessage(msg => ({
+                    ...msg,
+                    proposedChanges: proposal,
+                  }));
+                  
+                  // Notificar sobre la nueva propuesta
+                  onProposalCreated?.(proposal);
+                });
+              }
             } catch (e) {
               // Ignore malformed JSON lines
             }
@@ -265,6 +295,101 @@ export function useChatAI(options: UseChatAIOptions = {}) {
     lastPromptRef.current = "";
   }, [clearError]);
 
+  const approveProposal = useCallback(async (proposalId: string) => {
+    try {
+      if (!proposalId) {
+        console.error('approveProposal: proposalId es inválido', proposalId);
+        throw new Error('ID de propuesta inválido');
+      }
+      const token = Cookies.get('auth_token');
+      console.log('Enviando approveProposal con proposalId:', proposalId);
+      const response = await fetch("/api/tasks/proposals/approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ proposalId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al aprobar la propuesta");
+      }
+
+      setMessages(prev => prev.map(msg => 
+        msg.proposedChanges?.id === proposalId 
+          ? { ...msg, proposedChanges: undefined }
+          : msg
+      ));
+
+      window.dispatchEvent(new CustomEvent('taskProposalApproved', { 
+        detail: { proposalId } 
+      }));
+
+      return true;
+    } catch (error) {
+      console.error("Error approving proposal:", error);
+      return false;
+    }
+  }, []);
+
+  const saveProposal = useCallback(async (proposal: any) => {
+    try {
+      const token = Cookies.get('auth_token');
+      const response = await fetch("/api/tasks/proposals/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(proposal),
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al guardar la propuesta");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error saving proposal:", error);
+      return false;
+    }
+  }, []);
+
+  const rejectProposal = useCallback(async (proposalId: string) => {
+    try {
+      if (!proposalId) {
+        console.error('rejectProposal: proposalId es inválido', proposalId);
+        throw new Error('ID de propuesta inválido');
+      }
+      const token = Cookies.get('auth_token');
+      console.log('Enviando rejectProposal con proposalId:', proposalId);
+      const response = await fetch("/api/tasks/proposals/reject", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ proposalId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al rechazar la propuesta");
+      }
+
+      setMessages(prev => prev.map(msg => 
+        msg.proposedChanges?.id === proposalId 
+          ? { ...msg, proposedChanges: undefined }
+          : msg
+      ));
+
+      return true;
+    } catch (error) {
+      console.error("Error rejecting proposal:", error);
+      return false;
+    }
+  }, []);
+
   return {
     messages,
     isStreaming,
@@ -276,5 +401,7 @@ export function useChatAI(options: UseChatAIOptions = {}) {
     cancelRequest,
     clearMessages,
     clearError,
+    approveProposal,
+    rejectProposal,
   };
 } 

@@ -34,7 +34,19 @@ function TaskRow({ task, onEdit, onDelete, onAddSubtask, showSubtasks }: { task:
 
 export default function MainContent() {
   const { user } = useAuth();
-  const { tasks, loading, error, createTask, updateTask, deleteTask } = useTasks();
+  const { tasks, loading, error, createTask, updateTask, deleteTask, fetchTasks } = useTasks();
+
+  // Escuchar eventos de propuestas aprobadas
+  useEffect(() => {
+    const handleProposalApproved = () => {
+      fetchTasks();
+    };
+
+    window.addEventListener('taskProposalApproved', handleProposalApproved);
+    return () => {
+      window.removeEventListener('taskProposalApproved', handleProposalApproved);
+    };
+  }, [fetchTasks]);
 
   // Modal state
   const [open, setOpen] = useState(false);

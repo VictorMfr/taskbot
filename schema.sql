@@ -1,4 +1,6 @@
 -- Esquema de base de datos para TaskBot
+CREATE DATABASE IF NOT EXISTS taskbot;
+USE taskbot;
 
 CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
